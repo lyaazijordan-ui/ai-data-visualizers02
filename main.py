@@ -11,13 +11,20 @@ from reportlab.lib.styles import getSampleStyleSheet
 from auth import login, signup, load_user_settings, save_user_settings
 from db import save_data, load_data
 
-st.set_page_config(page_title="AI Data Dashboard", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="AI Data Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # -----------------------------
 # Sidebar Navigation
 # -----------------------------
 st.sidebar.title("🌐 AI Dashboard")
-page = st.sidebar.radio("Navigation", ["Login / Signup", "Upload & Visualize", "Reports", "Settings", "Logout"])
+page = st.sidebar.radio(
+    "Navigation",
+    ["Login / Signup", "Upload & Visualize", "Reports", "Settings", "Logout"]
+)
 
 # -----------------------------
 # Login / Signup
@@ -60,9 +67,9 @@ elif page == "Upload & Visualize":
     uploaded_file = st.file_uploader("Upload CSV", type="csv")
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        st.session_state["current_df"] = df
+        save_data("current_df", df)
     else:
-        df = st.session_state.get("current_df")
+        df = load_data("current_df")
 
     if df is not None:
         st.dataframe(df.head(), height=250)
@@ -106,7 +113,7 @@ elif page == "Reports":
     if "username" not in st.session_state:
         st.warning("Please log in first")
     else:
-        df = st.session_state.get("current_df")
+        df = load_data("current_df")
         if df is not None:
             buffer = BytesIO()
             doc = SimpleDocTemplate(buffer)
