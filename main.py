@@ -1,6 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
+from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table
+from reportlab.lib.styles import getSampleStyleSheet
+import time
 
 from auth import login, signup
 from db import save_user_data, load_user_data
@@ -20,6 +25,14 @@ h1 {
     text-align:center;
     color:#00f5d4;
 }
+h2,h3,h4 {
+    color:#00f5d4;
+}
+.stCaption {
+    text-align: center;
+    font-size:16px;
+    color:#b0bec5;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -27,41 +40,38 @@ h1 {
 if "page" not in st.session_state:
     st.session_state.page = "Login"
 
-# ---------------- LOGIN ----------------
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# ---------------- LOGIN / SIGNUP ----------------
 if st.session_state.page == "Login":
     st.title("🧠 Intellectual AI")
     st.caption("Where data meets intelligence")
     st.markdown("### ⚡ Smart Analytics • AI Insights • Intelligent Decisions")
 
-    tab1, tab2 = st.tabs(["Login","Sign Up"])
+    choice = st.radio("Choose action", ["Login", "Sign Up"], horizontal=True)
 
-    with tab1:
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-        if st.button("Login"):
+    if st.button("Proceed"):
+        if choice == "Login":
             if login(email,password):
                 st.session_state.user = email
                 st.session_state.page = "Dashboard"
-                st.rerun()
+                st.experimental_rerun()
             else:
                 st.error("Invalid login")
-
-    with tab2:
-        email = st.text_input("New Email")
-        password = st.text_input("New Password", type="password")
-
-        if st.button("Create Account"):
+        else:
             if signup(email,password):
-                st.success("Account created. Login now.")
+                st.success("Account created! You can now log in.")
             else:
                 st.error("Signup failed")
 
-# ---------------- SIDEBAR ----------------
-if "user" in st.session_state:
+# ---------------- AUTHORIZED NAVIGATION ----------------
+if st.session_state.user and st.session_state.page != "Login":
     st.sidebar.title("🧠 Intellectual AI")
     st.sidebar.caption(f"Logged in as {st.session_state.user}")
-
     st.session_state.page = st.sidebar.radio(
         "Navigation",
         ["Dashboard","AI Assistant","Reports","Settings","Logout"]
@@ -83,17 +93,26 @@ if st.session_state.page == "Dashboard":
     if df is not None:
         st.dataframe(df.head())
 
-        chart = st.selectbox("Chart Type", ["Line","Bar","Scatter"])
-        x = st.selectbox("X-axis", df.columns)
-        y = st.selectbox("Y-axis", df.columns)
+        chart_type = st.selectbox("Chart Type", ["Line","Bar","Scatter"])
+        x_col = st.selectbox("X-axis", df.columns)
+        y_col = st.selectbox("Y-axis", df.columns)
 
-        fig = px.line(df,x=x,y=y) if chart=="Line" else \
-              px.bar(df,x=x,y=y) if chart=="Bar" else \
-              px.scatter(df,x=x,y=y)
+        # ---------------- Animated chart ----------------
+        steps = 25
+        for i in range(steps):
+            subset = df.sample(frac=min(1,(i+1)/steps))
+            if chart_type=="Line":
+                fig = px.line(subset, x=x_col, y=y_col, template="plotly_dark", color_discrete_sequence=px.colors.sequential.Agsunset)
+            elif chart_type=="Bar":
+                fig = px.bar(subset, x=x_col, y=y_col, template="plotly_dark", color_discrete_sequence=px.colors.sequential.Agsunset)
+            else:
+                fig = px.scatter(subset, x=x_col, y=y_col, template="plotly_dark", color_discrete_sequence=px.colors.sequential.Agsunset)
+            fig.update_traces(marker=dict(size=10, line=dict(width=1, color='white')), selector=dict(mode='markers+lines'))
+            fig.update_layout(hovermode="x unified", plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig, use_container_width=True)
+            time.sleep(0.05)
 
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.download_button("⬇️ Download Chart", fig.to_html(), "chart.html")
+        st.download_button("⬇️ Download Chart HTML", fig.to_html(), "chart.html", mime="text/html")
 
 # ---------------- AI ASSISTANT ----------------
 if st.session_state.page == "AI Assistant":
@@ -116,14 +135,32 @@ if st.session_state.page == "AI Assistant":
 # ---------------- REPORTS ----------------
 if st.session_state.page == "Reports":
     st.title("📄 Reports")
-    st.info("Download charts from dashboard. PDF system can be extended.")
+    df = load_user_data(st.session_state.user,"data")
+    if df:
+        df = pd.DataFrame(df)
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer)
+        styles = getSampleStyleSheet()
+        elements = [Paragraph("User Data Report", styles['Title'])]
+        data_table = [df.columns.tolist()] + df.values.tolist()
+        elements.append(Table(data_table))
+        doc.build(elements)
+        buffer.seek(0)
+        st.download_button("Download PDF Report", buffer, file_name="report.pdf")
+    else:
+        st.info("No data available")
 
 # ---------------- SETTINGS ----------------
 if st.session_state.page == "Settings":
     st.title("⚙️ Settings")
-    st.write("More features coming soon...")
+    theme = st.selectbox("Theme", ["plotly_dark","plotly_white"], index=0)
+    chart_color = st.text_input("Default Chart Gradient", st.session_state.get("chart_color","Agsunset"))
+    if st.button("Save Settings"):
+        st.session_state["theme"] = theme
+        st.session_state["chart_color"] = chart_color
+        st.success("Settings saved!")
 
 # ---------------- LOGOUT ----------------
 if st.session_state.page == "Logout":
     st.session_state.clear()
-    st.rerun()
+    st.experimental_rerun()
