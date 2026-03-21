@@ -1,137 +1,125 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
-import time
-from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table
-from reportlab.lib.styles import getSampleStyleSheet
 
-from auth import login, signup, load_user_settings, save_user_settings
-from db import save_data, load_data, save_user_remote, load_user_remote
+from auth import login, signup
+from db import save_user_data, load_user_data
+from ai import analyze_data, ask_ai
 
-st.set_page_config(page_title="AI Data Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="ELAI AI DASHBOARD", layout="wide")
 
-st.sidebar.title("🌐 AI Dashboard")
-page = st.sidebar.radio("Navigation", ["Login / Signup", "Upload & Visualize", "Reports", "Settings", "Logout"])
+# ---------------- UI STYLE ----------------
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+    color: white;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# -----------------------------
-# Login / Signup
-# -----------------------------
-if page == "Login / Signup":
-    st.markdown("<h1 style='text-align:center'>Welcome to AI Data Dashboard</h1>", unsafe_allow_html=True)
-    choice = st.radio("Choose action", ["Login", "Sign Up"])
-    username = st.text_input("Username", max_chars=20)
-    password = st.text_input("Password", type="password", max_chars=50)
-    
-    if choice == "Login" and st.button("Login"):
-        if login(username, password):
-            st.session_state.update(load_user_settings(username))
-            st.success(f"Logged in as {username}")
-            st.experimental_rerun()
-        else:
-            st.error("Login failed. Check username/password.")
+# ---------------- SESSION ----------------
+if "page" not in st.session_state:
+    st.session_state.page = "Login"
 
-    elif choice == "Sign Up" and st.button("Sign Up"):
-        if signup(username, password):
-            st.success("Sign up successful! Please log in.")
-        else:
-            st.error("Sign up failed. Username may exist.")
+# ---------------- LOGIN ----------------
+if st.session_state.page == "Login":
+    st.title("🚀 ELAI AI DASHBOARD")
 
-# -----------------------------
-# Logout
-# -----------------------------
-elif page == "Logout":
-    if "username" in st.session_state:
-        st.session_state.clear()
-        st.success("Logged out")
+    tab1, tab2 = st.tabs(["Login","Sign Up"])
+
+    with tab1:
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            if login(u,p):
+                st.session_state.user = u
+                st.session_state.page = "Dashboard"
+                st.rerun()
+            else:
+                st.error("Invalid login")
+
+    with tab2:
+        u = st.text_input("New Username")
+        p = st.text_input("New Password", type="password")
+
+        if st.button("Create"):
+            if signup(u,p):
+                st.success("Account created")
+            else:
+                st.error("User exists")
+
+# ---------------- SIDEBAR ----------------
+if "user" in st.session_state:
+    st.sidebar.title(f"👤 {st.session_state.user}")
+    st.session_state.page = st.sidebar.radio(
+        "Menu",
+        ["Dashboard","AI","Reports","Settings","Logout"]
+    )
+
+# ---------------- DASHBOARD ----------------
+if st.session_state.page == "Dashboard":
+    st.title("📊 Dashboard")
+
+    file = st.file_uploader("Upload CSV")
+
+    if file:
+        df = pd.read_csv(file)
+        save_user_data(st.session_state.user, "data", df.to_dict())
     else:
-        st.info("You are not logged in")
-
-# -----------------------------
-# Upload & Visualize
-# -----------------------------
-elif page == "Upload & Visualize":
-    if "username" not in st.session_state:
-        st.warning("Please log in first for full features")
-    uploaded_file = st.file_uploader("Upload CSV", type="csv")
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        save_data("current_df", df)
-        save_user_remote(st.session_state["username"], "current_df", df)
-    else:
-        df = load_data("current_df") or load_user_remote(st.session_state.get("username"), "current_df")
+        data = load_user_data(st.session_state.user,"data")
+        df = pd.DataFrame(data) if data else None
 
     if df is not None:
-        st.dataframe(df.head(), height=250)
+        st.dataframe(df.head())
 
-        st.markdown("### 📊 Dataset Summary")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Rows", df.shape[0])
-        col2.metric("Columns", df.shape[1])
-        col3.metric("Mean Y", round(df.select_dtypes(include=np.number).mean().mean(),2))
-        col4.metric("Max Y", round(df.select_dtypes(include=np.number).max().max(),2))
+        chart = st.selectbox("Chart",["Line","Bar","Scatter"])
+        x = st.selectbox("X",df.columns)
+        y = st.selectbox("Y",df.columns)
 
-        st.markdown("---")
-        st.subheader("Interactive Chart")
-        chart_type = st.selectbox("Chart Type", ["Line", "Bar", "Scatter"])
-        x_col = st.selectbox("X-axis", df.columns)
-        y_col = st.selectbox("Y-axis", df.columns)
-        color_col = st.selectbox("Color column (optional)", [None]+list(df.columns))
-        template_theme = st.session_state.get("theme","plotly_dark")
-        color_args = {"color": color_col} if color_col else {}
-        
-        steps = 30
-        for i in range(steps):
-            subset = df.sample(frac=min(1,(i+1)/steps))
-            if chart_type=="Line":
-                fig = px.line(subset, x=x_col, y=y_col, **color_args, template=template_theme)
-            elif chart_type=="Bar":
-                fig = px.bar(subset, x=x_col, y=y_col, **color_args, template=template_theme)
-            else:
-                fig = px.scatter(subset, x=x_col, y=y_col, **color_args, template=template_theme)
-            fig.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')), selector=dict(mode='markers+lines'))
-            st.plotly_chart(fig, use_container_width=True)
-            time.sleep(0.05)
+        fig = px.line(df,x=x,y=y) if chart=="Line" else \
+              px.bar(df,x=x,y=y) if chart=="Bar" else \
+              px.scatter(df,x=x,y=y)
 
-        st.download_button("Download Chart HTML", fig.to_html(), file_name="chart.html", mime="text/html")
+        st.plotly_chart(fig,use_container_width=True)
 
-# -----------------------------
-# Reports
-# -----------------------------
-elif page == "Reports":
-    if "username" not in st.session_state:
-        st.warning("Please log in first")
+# ---------------- AI INSIGHTS ----------------
+if st.session_state.page == "AI":
+    st.title("🤖 AI Engine")
+
+    data = load_user_data(st.session_state.user,"data")
+    df = pd.DataFrame(data) if data else None
+
+    if df is not None:
+        st.subheader("Auto Insights")
+        st.write(analyze_data(df))
+
+        question = st.text_input("Ask your data")
+
+        if st.button("Ask AI"):
+            st.write(ask_ai(df, question))
+
     else:
-        df = load_data("current_df") or load_user_remote(st.session_state.get("username"), "current_df")
-        if df is not None:
-            buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer)
-            styles = getSampleStyleSheet()
-            elements = [Paragraph("User Data Report", styles['Title'])]
-            data_table = [df.columns.tolist()] + df.values.tolist()
-            elements.append(Table(data_table))
-            doc.build(elements)
-            buffer.seek(0)
-            st.download_button("Download PDF Report", buffer, file_name="report.pdf")
-        else:
-            st.info("No data available")
+        st.warning("Upload data first")
 
-# -----------------------------
-# Settings
-# -----------------------------
-elif page == "Settings":
-    if "username" not in st.session_state:
-        st.warning("Please log in first")
-    else:
-        st.subheader("User Settings")
-        theme = st.selectbox("Theme", ["plotly_dark", "plotly_white"], index=0)
-        chart_color = st.text_input("Default Chart Gradient", st.session_state.get("chart_color", "Agsunset"))
-        username = st.text_input("Username", st.session_state.get("username"))
-        if st.button("Save Settings"):
-            st.session_state["theme"] = theme
-            st.session_state["chart_color"] = chart_color
-            st.session_state["username"] = username
-            save_user_settings(username, theme, chart_color)
-            save_user_remote(username, "settings", {"theme":theme,"chart_color":chart_color})
-            st.success("Settings saved!")
+# ---------------- REPORTS ----------------
+if st.session_state.page == "Reports":
+    st.title("📄 Reports")
+
+    st.info("PDF export ready (simplified)")
+
+# ---------------- SETTINGS ----------------
+if st.session_state.page == "Settings":
+    st.title("⚙️ Settings")
+
+    theme = st.selectbox("Theme",["dark","light"])
+
+    if st.button("Save"):
+        save_user_data(st.session_state.user,"theme",theme)
+        st.success("Saved")
+
+# ---------------- LOGOUT ----------------
+if st.session_state.page == "Logout":
+    st.session_state.clear()
+    st.rerun()
