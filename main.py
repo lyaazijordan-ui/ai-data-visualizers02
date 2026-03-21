@@ -1,4 +1,3 @@
-# main.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,22 +8,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Table
 from reportlab.lib.styles import getSampleStyleSheet
 
 from auth import login, signup, load_user_settings, save_user_settings
-from db import save_data, load_data
+from db import save_data, load_data, save_user_remote, load_user_remote
 
-st.set_page_config(
-    page_title="AI Data Dashboard",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Data Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# -----------------------------
-# Sidebar Navigation
-# -----------------------------
 st.sidebar.title("🌐 AI Dashboard")
-page = st.sidebar.radio(
-    "Navigation",
-    ["Login / Signup", "Upload & Visualize", "Reports", "Settings", "Logout"]
-)
+page = st.sidebar.radio("Navigation", ["Login / Signup", "Upload & Visualize", "Reports", "Settings", "Logout"])
 
 # -----------------------------
 # Login / Signup
@@ -38,6 +27,7 @@ if page == "Login / Signup":
     if choice == "Login" and st.button("Login"):
         if login(username, password):
             st.session_state.update(load_user_settings(username))
+            st.success(f"Logged in as {username}")
             st.experimental_rerun()
         else:
             st.error("Login failed. Check username/password.")
@@ -68,8 +58,9 @@ elif page == "Upload & Visualize":
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         save_data("current_df", df)
+        save_user_remote(st.session_state["username"], "current_df", df)
     else:
-        df = load_data("current_df")
+        df = load_data("current_df") or load_user_remote(st.session_state.get("username"), "current_df")
 
     if df is not None:
         st.dataframe(df.head(), height=250)
@@ -90,7 +81,6 @@ elif page == "Upload & Visualize":
         template_theme = st.session_state.get("theme","plotly_dark")
         color_args = {"color": color_col} if color_col else {}
         
-        # Animated chart simulation
         steps = 30
         for i in range(steps):
             subset = df.sample(frac=min(1,(i+1)/steps))
@@ -113,7 +103,7 @@ elif page == "Reports":
     if "username" not in st.session_state:
         st.warning("Please log in first")
     else:
-        df = load_data("current_df")
+        df = load_data("current_df") or load_user_remote(st.session_state.get("username"), "current_df")
         if df is not None:
             buffer = BytesIO()
             doc = SimpleDocTemplate(buffer)
@@ -143,4 +133,5 @@ elif page == "Settings":
             st.session_state["chart_color"] = chart_color
             st.session_state["username"] = username
             save_user_settings(username, theme, chart_color)
+            save_user_remote(username, "settings", {"theme":theme,"chart_color":chart_color})
             st.success("Settings saved!")
