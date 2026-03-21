@@ -1,28 +1,19 @@
 import streamlit as st
-import pandas as pd
+from supabase import create_client
 
-def save_data(key, df):
-    st.session_state[key] = df
+supabase = create_client(
+    st.secrets["SUPABASE_URL"],
+    st.secrets["SUPABASE_KEY"]
+)
 
-def load_data(key):
-    return st.session_state.get(key)
+def save_user_data(user,key,value):
+    supabase.table("users").upsert({
+        "email": user,
+        key: str(value)
+    }).execute()
 
-# -----------------------------
-# Supabase-like persistent user storage
-# -----------------------------
-def save_user_remote(username, key, value):
-    if "remote_users" not in st.session_state:
-        st.session_state["remote_users"] = {}
-    if username not in st.session_state["remote_users"]:
-        st.session_state["remote_users"][username]={}
-    st.session_state["remote_users"][username][key] = value
-
-def load_user_remote(username, key=None):
-    if "remote_users" not in st.session_state:
-        return None
-    user = st.session_state["remote_users"].get(username)
-    if not user:
-        return None
-    if key:
-        return user.get(key)
-    return user
+def load_user_data(user,key):
+    res = supabase.table("users").select(key).eq("email",user).execute()
+    if res.data:
+        return eval(res.data[0][key])
+    return None
