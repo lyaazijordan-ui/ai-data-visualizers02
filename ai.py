@@ -1,20 +1,11 @@
-import pandas as pd
+from openai import OpenAI
+import streamlit as st
 
-def analyze_data(df):
-    insights = []
-    num = df.select_dtypes(include="number")
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-    if not num.empty:
-        insights.append(f"Average: {num.mean().mean():.2f}")
-        insights.append(f"Max: {num.max().max():.2f}")
-        insights.append(f"Min: {num.min().min():.2f}")
-
-    return insights
-
-def ask_ai(df, question):
-    if "average" in question.lower():
-        return df.select_dtypes(include="number").mean().to_dict()
-    elif "max" in question.lower():
-        return df.select_dtypes(include="number").max().to_dict()
-    else:
-        return "I can answer basic data questions (avg, max, min)"
+def chat_with_ai(messages):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
+    )
+    return response.choices[0].message.content
