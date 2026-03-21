@@ -6,19 +6,22 @@ from auth import login, signup
 from db import save_user_data, load_user_data
 from ai import chat_with_ai
 
-st.set_page_config(page_title="ELAI AI DASHBOARD", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Intellectual AI", layout="wide")
 
-# ---------------- THEME ----------------
-theme = st.selectbox("Theme", ["Neon Dark","Cyberpunk","Light","Minimal"])
-
-if theme == "Neon Dark":
-    st.markdown("<style>.stApp{background:linear-gradient(135deg,#000428,#004e92);color:white}</style>", unsafe_allow_html=True)
-elif theme == "Cyberpunk":
-    st.markdown("<style>.stApp{background:linear-gradient(135deg,#ff00cc,#333399);color:white}</style>", unsafe_allow_html=True)
-elif theme == "Light":
-    st.markdown("<style>.stApp{background:white;color:black}</style>", unsafe_allow_html=True)
-elif theme == "Minimal":
-    st.markdown("<style>.stApp{background:#f5f5f5;color:black}</style>", unsafe_allow_html=True)
+# ---------------- PREMIUM UI ----------------
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+    color: white;
+}
+h1 {
+    text-align:center;
+    color:#00f5d4;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------- SESSION ----------------
 if "page" not in st.session_state:
@@ -26,45 +29,49 @@ if "page" not in st.session_state:
 
 # ---------------- LOGIN ----------------
 if st.session_state.page == "Login":
-    st.title("🚀 ELAI AI DASHBOARD")
+    st.title("🧠 Intellectual AI")
+    st.caption("Where data meets intelligence")
+    st.markdown("### ⚡ Smart Analytics • AI Insights • Intelligent Decisions")
 
     tab1, tab2 = st.tabs(["Login","Sign Up"])
 
     with tab1:
-        u = st.text_input("Email")
-        p = st.text_input("Password", type="password")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
 
         if st.button("Login"):
-            if login(u,p):
-                st.session_state.user = u
+            if login(email,password):
+                st.session_state.user = email
                 st.session_state.page = "Dashboard"
                 st.rerun()
             else:
                 st.error("Invalid login")
 
     with tab2:
-        u = st.text_input("New Email")
-        p = st.text_input("New Password", type="password")
+        email = st.text_input("New Email")
+        password = st.text_input("New Password", type="password")
 
         if st.button("Create Account"):
-            if signup(u,p):
-                st.success("Account created")
+            if signup(email,password):
+                st.success("Account created. Login now.")
             else:
                 st.error("Signup failed")
 
 # ---------------- SIDEBAR ----------------
 if "user" in st.session_state:
-    st.sidebar.title(f"👤 {st.session_state.user}")
+    st.sidebar.title("🧠 Intellectual AI")
+    st.sidebar.caption(f"Logged in as {st.session_state.user}")
+
     st.session_state.page = st.sidebar.radio(
-        "Menu",
+        "Navigation",
         ["Dashboard","AI Assistant","Reports","Settings","Logout"]
     )
 
 # ---------------- DASHBOARD ----------------
 if st.session_state.page == "Dashboard":
-    st.title("📊 Dashboard")
+    st.title("📊 Intellectual Dashboard")
 
-    file = st.file_uploader("Upload CSV")
+    file = st.file_uploader("Upload CSV", type="csv")
 
     if file:
         df = pd.read_csv(file)
@@ -76,47 +83,45 @@ if st.session_state.page == "Dashboard":
     if df is not None:
         st.dataframe(df.head())
 
-        chart = st.selectbox("Chart",["Line","Bar","Scatter"])
-        x = st.selectbox("X",df.columns)
-        y = st.selectbox("Y",df.columns)
+        chart = st.selectbox("Chart Type", ["Line","Bar","Scatter"])
+        x = st.selectbox("X-axis", df.columns)
+        y = st.selectbox("Y-axis", df.columns)
 
         fig = px.line(df,x=x,y=y) if chart=="Line" else \
               px.bar(df,x=x,y=y) if chart=="Bar" else \
               px.scatter(df,x=x,y=y)
 
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.download_button("Download Chart", fig.to_html(), "chart.html")
+        st.download_button("⬇️ Download Chart", fig.to_html(), "chart.html")
 
 # ---------------- AI ASSISTANT ----------------
 if st.session_state.page == "AI Assistant":
-    st.title("🤖 AI Assistant")
+    st.title("🤖 Intellectual AI Assistant")
 
     if "chat" not in st.session_state:
-        st.session_state.chat = [{"role":"system","content":"You are a smart AI assistant."}]
+        st.session_state.chat = [{"role":"system","content":"You are a smart AI data assistant."}]
 
-    user_input = st.text_input("Ask anything...")
+    user_input = st.text_input("Ask anything about your data or general questions...")
 
     if st.button("Send"):
         st.session_state.chat.append({"role":"user","content":user_input})
-
         reply = chat_with_ai(st.session_state.chat)
-
         st.session_state.chat.append({"role":"assistant","content":reply})
 
     for msg in st.session_state.chat:
         if msg["role"] != "system":
-            st.write(f"**{msg['role']}:** {msg['content']}")
+            st.write(f"**{msg['role'].capitalize()}:** {msg['content']}")
 
 # ---------------- REPORTS ----------------
 if st.session_state.page == "Reports":
     st.title("📄 Reports")
-    st.info("You can export charts and summaries from dashboard")
+    st.info("Download charts from dashboard. PDF system can be extended.")
 
 # ---------------- SETTINGS ----------------
 if st.session_state.page == "Settings":
     st.title("⚙️ Settings")
-    st.write("Theme already selectable at top")
+    st.write("More features coming soon...")
 
 # ---------------- LOGOUT ----------------
 if st.session_state.page == "Logout":
