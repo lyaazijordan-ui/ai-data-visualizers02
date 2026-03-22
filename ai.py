@@ -1,11 +1,19 @@
-from openai import OpenAI
+import requests
 import streamlit as st
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+API_KEY = st.secrets["OPENROUTER_API_KEY"]
 
 def chat_with_ai(messages):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
+    response = requests.post(
+        url="https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "mistralai/mistral-7b-instruct",
+            "messages": messages
+        }
     )
-    return response.choices[0].message.content
+
+    return response.json()["choices"][0]["message"]["content"]
